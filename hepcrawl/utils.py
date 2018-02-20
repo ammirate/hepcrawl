@@ -11,6 +11,7 @@ from __future__ import absolute_import, division, print_function
 
 import inspect
 import fnmatch
+import json
 import os
 import pprint
 import re
@@ -479,6 +480,8 @@ class ParsedItem(dict):
             populated by :class:`hepcrawl.pipelines.DocumentsPipeline` from the
             ``file_urls`` parameter.
 
+        source_file(str): name of the crawled file.
+
     Attributes:
         *: this class bypasses the regular dict ``__getattr__`` allowing to
             access any of it's elements as attributes.
@@ -490,6 +493,7 @@ class ParsedItem(dict):
         file_urls=None,
         ftp_params=None,
         record_files=None,
+        source_file=None,
         **kwargs
     ):
         super(ParsedItem, self).__init__(
@@ -498,6 +502,7 @@ class ParsedItem(dict):
             file_urls=file_urls,
             ftp_params=ftp_params,
             record_files=record_files,
+            source_file=source_file,
             **kwargs
         )
 
@@ -517,3 +522,42 @@ class ParsedItem(dict):
 
     def __str__(self):
         return pprint.pformat(self)
+
+
+class CrawlResult(object):
+    """Representation of a crawling result.
+
+    This class defines the API used by the pipeline to send crawl results.
+
+    Attributes:
+        record (dict): the crawled record.
+        file_name (str): the name of the remote file crawled.
+        source_data (str): content of the remote file crawled.
+        errors (list): list of dictionaries with keys "exception" and
+        "traceback", which collects all the errors occurred during the parsing
+            phase.
+    """
+    def __init__(self):
+        self.record = {}
+        self.file_name = ""
+        self.source_data = ""
+        self.errors = []
+
+    def add_error(self, exception_class, traceback):
+        error = {
+            'exception': exception_class,
+            'traceback': traceback
+        }
+        self.errors.append(error)
+
+    @staticmethod
+    def from_parsed_item(parsed_item):
+        result = CrawlResult()
+        result.record = parsed_item.get('record')
+        result.file_name = parsed_item.get('file_name')
+        result.source_data = parsed_item.get('source_data')
+        result.add_error(parsed_item.get('exception'), parsed_item.get('traceabck'))
+        return result
+
+    def to_dict(self):
+        return self.__dict__

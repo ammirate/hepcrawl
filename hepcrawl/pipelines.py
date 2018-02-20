@@ -27,7 +27,7 @@ from scrapy.pipelines.files import FilesPipeline
 
 from .tohep import item_to_hep
 from .settings import FILES_STORE
-from .utils import RecordFile
+from .utils import CrawlResult, RecordFile
 
 
 LOGGER = logging.getLogger(name=__name__)
@@ -94,29 +94,29 @@ class InspireAPIPushPipeline(object):
     def open_spider(self, spider):
         self.results_data = []
 
-    def _post_enhance_item(self, item, spider):
-        source = spider.source
-
-        enhanced_record = item_to_hep(
-            item=item,
-            source=source,
-        )
-        spider.logger.debug(
-            'Got post-enhanced hep record:\n%s' % pprint.pformat(
-                enhanced_record
-            )
-        )
-        return enhanced_record
-
     def process_item(self, item, spider):
-        """Convert internal format to INSPIRE data model."""
+        """Add the item to the results data after processing it.
+
+        This function enhance the crawled record from the parsed item, then
+        create a crawl_result object from the parsed item and adds it to
+        `self.results_data`. In this way, the record or eventual errors
+        occurred processing it are saved.
+
+        Args:
+            item (ParsedItem): the parsed item returned by parsing the
+                crawled record.
+            spider (StatefulSpider): the current spider.
+
+        Returns:
+            (CrawlResult): the crawl result containing either the crawled
+                record or the errors occurred during the process.
+        """
         self.count += 1
-
-        hep_record = self._post_enhance_item(item, spider)
-
-        self.results_data.append(hep_record)
-
-        return hep_record
+        item.record = item_to_hep(item=item, source=spider.source)
+        spider.logger.debug('Got post-enhanced hep record:\n%s' % pprint.pformat(item.record))
+        crawl_result = CrawlResult.from_parsed_item(item)
+        self.results_data.append(crawl_result.to_dict())
+        return crawl_result
 
     def _prepare_payload(self, spider):
         """Return payload for push."""

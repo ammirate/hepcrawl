@@ -211,7 +211,6 @@ class DesySpider(StatefulSpider):
     def parse(self, response):
         """Parse a ``Desy`` XML file into a :class:`hepcrawl.utils.ParsedItem`.
         """
-
         self.logger.info('Got record from url/path: {0}'.format(response.url))
         self.logger.info('FTP enabled: {0}'.format(self.ftp_enabled))
         ftp_params = None
@@ -234,10 +233,10 @@ class DesySpider(StatefulSpider):
         marcxml_records = self._get_marcxml_records(response.body)
         self.logger.info('Got %d marc xml records' % len(marcxml_records))
         self.logger.info('Getting hep records...')
-        hep_records = self._hep_records_from_marcxml(marcxml_records)
-        self.logger.info('Got %d hep records' % len(hep_records))
+        parsed_items = self._parsed_item_from_marcxml(marcxml_records)
+        self.logger.info('Got %d hep records' % len(parsed_items))
 
-        for hep_record in hep_records:
+        for parsed_item in parsed_items:
             files_to_download = [
                 self._get_full_uri(
                     current_url=document['url'],
@@ -245,7 +244,7 @@ class DesySpider(StatefulSpider):
                     schema=url_schema,
                     hostname=hostname,
                 )
-                for document in hep_record.get('documents', [])
+                for document in parsed_item.record.get('documents', [])
                 if self._has_to_be_downloaded(document['url'])
             ]
 
@@ -253,12 +252,10 @@ class DesySpider(StatefulSpider):
                 'Got the following attached documents to download: %s'
                 % files_to_download
             )
-            parsed_item = ParsedItem(
-                record=hep_record,
-                file_urls=files_to_download,
-                ftp_params=ftp_params,
-                record_format='hep',
-            )
+            parsed_item.file_urls = files_to_download
+            parsed_item.ftp_params = ftp_params
+            parsed_item.file_name = response.url.split('/')[-1]
+
             self.logger.info('Got item: %s' % parsed_item)
 
             yield parsed_item
@@ -277,24 +274,26 @@ class DesySpider(StatefulSpider):
 
         return [etree.tostring(item) for item in list_items]
 
-    def _hep_records_from_marcxml(self, marcxml_records):
-        def _create_json_record(xml_record):
+    def _parsed_item_from_marcxml(self, marcxml_records):
+        def _get_crawl_result(xml_record):
             app = Flask('hepcrawl')
             app.config.update(
                 self.settings.getdict('MARC_TO_HEP_SETTINGS', {})
             )
             with app.app_context():
+                item = ParsedItem(record={}, record_format='hep')
                 try:
-                    hep_record = marcxml2record(xml_record)
+                    item.record = marcxml2record(xml_record)
                 except Exception as e:
-                    return {'xml_record': xml_record, 'error': repr(e),
-                            'traceback': traceback.format_tb(sys.exc_info()[2])}
-                
-            return hep_record
+                    item.exception = repr(e)
+                    item.traceback = traceback.format_tb(sys.exc_info()[2])
+                    item.source_data = xml_record
 
-        hep_records = []
+            return item
+
+        parsed_items = []
         for xml_record in marcxml_records:
-            json_record = _create_json_record(xml_record)
-            hep_records.append(json_record)
+            parsed_item = _get_crawl_result(xml_record)
+            parsed_items.append(parsed_item)
 
-        return hep_records
+        return parsed_items

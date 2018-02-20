@@ -7,7 +7,7 @@
 # under the terms of the Revised BSD License; see LICENSE file for
 # more details.
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import absolute_import, division, print_function
 
 import json
 import mock
@@ -84,18 +84,20 @@ def test_prepare_payload(
     result = pipeline._prepare_payload(spider)
 
     # acquisition_source has a timestamp
-    result['results_data'][0]['acquisition_source'].pop('datetime')
+    record_result = result['results_data'][0]['record']
+    record_result['acquisition_source'].pop('datetime')
     expected_response['results_data'][0]['acquisition_source'].pop('date')
 
-    for record in result['results_data']:
-        validate(record, 'hep')
+    for crawl_result in result['results_data']:
+        validate(crawl_result['record'], 'hep')
 
-    for res, exp in zip(
+    for crawl_result, exp in zip(
         result['results_data'],
         expected_response['results_data'],
     ):
-        for key in res:
+        record = crawl_result['record']
+        for key in record:
             assert key in exp
-            assert res[key] == exp[key]
+            assert record[key] == exp[key]
 
-    assert result == expected_response
+    assert sorted(result) == sorted(expected_response)

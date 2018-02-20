@@ -160,7 +160,7 @@ def test_desy(
         settings.get('CRAWLER_HOST_URL')
     )
 
-    results = CeleryMonitor.do_crawl(
+    crawl_results = CeleryMonitor.do_crawl(
         app=celery_app,
         monitor_timeout=5,
         monitor_iter_limit=100,
@@ -172,7 +172,9 @@ def test_desy(
         **settings.get('CRAWLER_ARGUMENTS')
     )
 
-    gotten_results = override_dynamic_fields_on_records(results)
+    records = [result['record'] for result in crawl_results]
+
+    gotten_results = override_dynamic_fields_on_records(records)
     expected_results = override_dynamic_fields_on_records(expected_results)
 
     gotten_results = deep_sort(
